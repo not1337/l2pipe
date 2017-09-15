@@ -43,22 +43,22 @@ l2pipe -r [-m] [-v] dev ...
 
 A maximum of 10 devices is supported.
 
--s     sender mode
--r     receiver mode
--v     verbose errors
--m     reduced memory footprint
--3     use 3 parallel compressors (default 4)
--2     use 2 parallel compressors (default 4)
--1     use 1 compressor (default 4)
--0     use no compressor (default 4 compressors)
--a arg use destribution scheme across devices
-       according to arg:
-       arg=n[.n[.n[...]]]
-       n=a numeric value from 1 to 10
-       use first n as amount of large packets to
-       queue for first device, use second n for
-       for second device and so on...
-       Default is one large packet per device.
+ -s     sender mode
+ -r     receiver mode
+ -v     verbose errors
+ -m     reduced memory footprint
+ -3     use 3 parallel compressors (default 4)
+ -2     use 2 parallel compressors (default 4)
+ -1     use 1 compressor (default 4)
+ -0     use no compressor (default 4 compressors)
+ -a arg use destribution scheme across devices
+        according to arg:
+        arg=n[.n[.n[...]]]
+        n=a numeric value from 1 to 10
+        use first n as amount of large packets to
+        queue for first device, use second n for
+        for second device and so on...
+        Default is one large packet per device.
 
 Example:
 --------
