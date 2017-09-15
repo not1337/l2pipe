@@ -38,6 +38,7 @@ Usage and Command Line Options:
 -------------------------------
 
 l2pipe -s [-m] [-v] [-3|-2|-1|-0] [-a arg] dev ...
+
 l2pipe -r [-m] [-v] dev ...
 
 A maximum of 10 devices is supported.
