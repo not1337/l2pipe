@@ -1668,23 +1668,27 @@ COLD int main(int argc,char *argv[])
 	if(mode)rw=reader_start(c,argv+optind,dist,small,comp,0,fin);
 	else rw=writer_start(c,argv+optind,small,1,fin);
 
-	if(rw)while(1)
+	if(rw)
 	{
-		while(UNLIKELY(poll(p,2,-1)<1));
-		if(p[0].events&POLLIN)
-			if(read(sig,&info,sizeof(info))==sizeof(info))
+		while(1)
 		{
-			if(verbose)fprintf(stderr,"signal received\n");
-			pthread_mutex_lock(&ptx);
-			err=1;
-			pthread_mutex_unlock(&ptx);
-			break;
+			while(UNLIKELY(poll(p,2,-1)<1));
+			if(p[0].events&POLLIN)
+				if(read(sig,&info,sizeof(info))==sizeof(info))
+			{
+				if(verbose)fprintf(stderr,"signal received\n");
+				pthread_mutex_lock(&ptx);
+				err=1;
+				pthread_mutex_unlock(&ptx);
+				break;
+			}
+			if(p[1].events&POLLIN)break;
 		}
-		if(p[1].events&POLLIN)break;
-	}
 
-	if(mode)reader_end(rw);
-	else writer_end(rw);
+		if(mode)reader_end(rw);
+		else writer_end(rw);
+	}
+	else err=1;
 
 	close(sig);
 	close(fin);
