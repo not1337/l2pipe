@@ -167,6 +167,19 @@ static int ecnt;
 static int err;
 static int verbose;
 
+static COLD int setprio(int mode)
+{
+	struct sched_param sched;
+
+	memset(&sched,0,sizeof(sched));
+	if(mode)
+	{
+		sched.sched_priority=1;
+		return sched_setscheduler(0,SCHED_RR,&sched);
+	}
+	else return sched_setscheduler(0,SCHED_OTHER,&sched);
+}
+
 static COLD int setrbuf(int s,int size)
 {
 	socklen_t l;
@@ -713,6 +726,17 @@ static HOT void *compressor(void *d)
 	BUFFER *res;
 	struct pollfd p[2];
 
+	if(setprio(0))
+	{
+		if(verbose)fprintf(stderr,"compressor prio setup error\n");
+		pthread_mutex_lock(&ptx);
+		err=1;
+		pthread_mutex_unlock(&ptx);
+		dummy=1;
+		dummy=write(data->efin,&dummy,sizeof(dummy));
+		goto abort;
+	}
+
 	p[0].fd=data->ein;
 	p[0].events=POLLIN;
 	p[1].fd=data->efin;
@@ -755,7 +779,7 @@ static HOT void *compressor(void *d)
 		dummy=write(data->eout,&dummy,sizeof(dummy));
 	}
 
-	pthread_exit(NULL);
+abort:	pthread_exit(NULL);
 }
 
 static HOT void *reader(void *d)
@@ -839,6 +863,17 @@ static HOT void *reader(void *d)
 		}
 
 		goto fail;
+	}
+
+	if(setprio(0))
+	{
+		if(verbose)fprintf(stderr,"reader prio setup error\n");
+		pthread_mutex_lock(&ptx);
+		err=1;
+		pthread_mutex_unlock(&ptx);
+		dummy=1;
+		dummy=write(data->efin,&dummy,sizeof(dummy));
+		goto term;
 	}
 
 	p[0].fd=data->efin;
@@ -1203,6 +1238,17 @@ static HOT void *decompressor(void *d)
 	BUFFER *res;
 	struct pollfd p[2];
 
+	if(setprio(0))
+	{
+		if(verbose)fprintf(stderr,"decompressor prio setup error\n");
+		pthread_mutex_lock(&ptx);
+		err=1;
+		pthread_mutex_unlock(&ptx);
+		dummy=1;
+		dummy=write(data->efin,&dummy,sizeof(dummy));
+		goto abort;
+	}
+
 	p[0].fd=data->ein;
 	p[0].events=POLLIN;
 	p[1].fd=data->efin;
@@ -1256,7 +1302,7 @@ static HOT void *decompressor(void *d)
 		dummy=write(data->eout,&dummy,sizeof(dummy));
 	}
 
-	pthread_exit(NULL);
+abort:	pthread_exit(NULL);
 }
 
 static HOT void *writer(void *d)
@@ -1333,6 +1379,15 @@ out:		if(verbose)fprintf(stderr,"writer setup error\n");
 		}
 
 		goto out;
+	}
+
+	if(setprio(0))
+	{
+		if(verbose)fprintf(stderr,"writer prio setup error\n");
+		pthread_mutex_lock(&ptx);
+		err=1;
+		pthread_mutex_unlock(&ptx);
+		goto abort;
 	}
 
 	p[0].fd=ein;
@@ -1639,6 +1694,12 @@ COLD int main(int argc,char *argv[])
 		if(i!=c)usage();
 	}
 
+	if(setprio(1))
+	{
+		perror("sched_setscheduler");
+		return 1;
+	}
+
 	if((fin=eventfd(0,EFD_NONBLOCK|EFD_CLOEXEC))==-1)
 	{
 		perror("eventfd");
@@ -1670,7 +1731,8 @@ COLD int main(int argc,char *argv[])
 
 	if(rw)
 	{
-		while(1)
+		if(setprio(0))err=1;
+		else while(1)
 		{
 			while(UNLIKELY(poll(p,2,-1)<1));
 			if(p[0].events&POLLIN)
