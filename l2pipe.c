@@ -24,6 +24,7 @@
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
 #include <sys/signalfd.h>
+#include <sys/capability.h>
 #include <sys/mman.h>
 #include <sched.h>
 #include <fcntl.h>
@@ -185,6 +186,20 @@ static COLD int setprio(int mode)
 		return sched_setscheduler(0,SCHED_RR,&sched);
 	}
 	else return sched_setscheduler(0,SCHED_OTHER,&sched);
+}
+
+static COLD int dropcaps(void)
+{
+	struct __user_cap_header_struct h;
+	struct __user_cap_data_struct c[2];
+
+	memset(&h,0,sizeof(h));
+	h.version=_LINUX_CAPABILITY_VERSION;
+	memset(&c,0,sizeof(c));
+	c[CAP_TO_INDEX(CAP_IPC_LOCK)].effective|=CAP_TO_MASK(CAP_IPC_LOCK);
+	c[CAP_TO_INDEX(CAP_IPC_LOCK)].permitted|=CAP_TO_MASK(CAP_IPC_LOCK);
+	if(capset(&h,c))return -1;
+	return 0;
 }
 
 static COLD int setrbuf(int s,int size)
@@ -500,10 +515,16 @@ static HOT void *sender(void *d)
 	again=0;
 	hold=1;
 
+	if(dropcaps())
+	{
+		if(verbose)fprintf(stderr,"sender caps error\n");
+		goto abort;
+	}
+
 	if(doconnect(data))
 	{
 		if(verbose)fprintf(stderr,"connect error\n");
-		pthread_mutex_lock(&ptx);
+abort:		pthread_mutex_lock(&ptx);
 		err=1;
 		pthread_mutex_unlock(&ptx);
 		dummy=1;
@@ -736,7 +757,13 @@ static HOT void *compressor(void *d)
 	if(setprio(0))
 	{
 		if(verbose)fprintf(stderr,"compressor prio setup error\n");
-		pthread_mutex_lock(&ptx);
+		goto bad;
+	}
+
+	if(dropcaps())
+	{
+		if(verbose)fprintf(stderr,"compressor caps error\n");
+bad:		pthread_mutex_lock(&ptx);
 		err=1;
 		pthread_mutex_unlock(&ptx);
 		dummy=1;
@@ -875,7 +902,13 @@ static HOT void *reader(void *d)
 	if(setprio(0))
 	{
 		if(verbose)fprintf(stderr,"reader prio setup error\n");
-		pthread_mutex_lock(&ptx);
+		goto bad;
+	}
+
+	if(dropcaps())
+	{
+		if(verbose)fprintf(stderr,"reader caps error\n");
+bad:		pthread_mutex_lock(&ptx);
 		err=1;
 		pthread_mutex_unlock(&ptx);
 		dummy=1;
@@ -1077,10 +1110,16 @@ static HOT void *receiver(void *d)
 	ptr=&data->pkt[nxt++];
 	bfr=NULL;
 
+	if(dropcaps())
+	{
+		if(verbose)fprintf(stderr,"receiver caps error\n");
+		goto abort;
+	}
+
 	if(doaccept(data))
 	{
 		if(verbose)fprintf(stderr,"accept error\n");
-		pthread_mutex_lock(&ptx);
+abort:		pthread_mutex_lock(&ptx);
 		err=1;
 		pthread_mutex_unlock(&ptx);
 		dummy=1;
@@ -1248,7 +1287,13 @@ static HOT void *decompressor(void *d)
 	if(setprio(0))
 	{
 		if(verbose)fprintf(stderr,"decompressor prio setup error\n");
-		pthread_mutex_lock(&ptx);
+		goto bad;
+	}
+
+	if(dropcaps())
+	{
+		if(verbose)fprintf(stderr,"decompressor caps error\n");
+bad:		pthread_mutex_lock(&ptx);
 		err=1;
 		pthread_mutex_unlock(&ptx);
 		dummy=1;
@@ -1391,7 +1436,13 @@ out:		if(verbose)fprintf(stderr,"writer setup error\n");
 	if(setprio(0))
 	{
 		if(verbose)fprintf(stderr,"writer prio setup error\n");
-		pthread_mutex_lock(&ptx);
+		goto bad;
+	}
+
+	if(dropcaps())
+	{
+		if(verbose)fprintf(stderr,"writer caps error\n");
+bad:		pthread_mutex_lock(&ptx);
 		err=1;
 		pthread_mutex_unlock(&ptx);
 		goto abort;
@@ -1751,7 +1802,7 @@ COLD int main(int argc,char *argv[])
 
 	if(rw)
 	{
-		if(setprio(0))err=1;
+		if(setprio(0)||dropcaps())err=1;
 		else while(1)
 		{
 			while(UNLIKELY(poll(p,2,-1)<1));
