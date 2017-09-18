@@ -19,10 +19,13 @@
  *
  */
 
+#define _GNU_SOURCE
 #include <pthread.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
 #include <sys/signalfd.h>
+#include <sys/mman.h>
+#include <sched.h>
 #include <fcntl.h>
 #include <linux/filter.h>
 #include <linux/if_ether.h>
@@ -56,6 +59,10 @@
 #define HOT
 #define COLD
 #define NORETURN
+#endif
+
+#ifndef MCL_ONFAULT
+#define MCL_ONFAULT 0
 #endif
 
 #define H2LEN (sizeof(struct ethhdr)+sizeof(uint32_t)+2*sizeof(uint16_t))
@@ -1692,6 +1699,19 @@ COLD int main(int argc,char *argv[])
 			if(dist[i]<1||dist[i]>10||*end)usage();
 		}
 		if(i!=c)usage();
+	}
+
+	errno=0;
+	if(nice(-10)==-1&&errno)
+	{
+		perror("nice");
+		return 1;
+	}
+
+	if(mlockall(MCL_CURRENT|MCL_FUTURE|MCL_ONFAULT))
+	{
+		perror("mlockall");
+		return 1;
 	}
 
 	if(setprio(1))
